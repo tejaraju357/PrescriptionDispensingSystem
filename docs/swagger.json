@@ -1,0 +1,241 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "description": "API for managing prescriptions, medicines, and dispensing",
+    "title": "Prescription Dispensing System API",
+    "version": "1.0",
+    "contact": {}
+  },
+  "host": "localhost:9000",
+  "basePath": "/api",
+  "schemes": ["http"],
+  "paths": {
+    "/register": {
+      "post": {
+        "summary": "Register a new admin",
+        "description": "Creates the first admin user. Only one admin can be created.",
+        "tags": ["auth"],
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "user",
+            "in": "body",
+            "description": "Admin user details",
+            "required": true,
+            "schema": { "$ref": "#/definitions/models.User" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Admin created successfully",
+            "schema": { "type": "object", "additionalProperties": true }
+          },
+          "400": { "description": "Invalid request or missing fields" },
+          "403": { "description": "Admin already exists or forbidden action" },
+          "409": { "description": "Email already exists" },
+          "500": { "description": "Internal server error" }
+        },
+        "security": [{ "BearerAuth": [] }]
+      }
+    },
+    "/login": {
+      "post": {
+        "summary": "Login user",
+        "description": "Authenticates user and returns JWT token",
+        "tags": ["auth"],
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "credentials",
+            "in": "body",
+            "description": "Email and password",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": { "email": { "type": "string" }, "password": { "type": "string" } }
+            }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Login successful", "schema": { "type": "object", "additionalProperties": true } },
+          "400": { "description": "Invalid request" },
+          "401": { "description": "Invalid credentials" },
+          "500": { "description": "Internal server error" }
+        },
+        "security": [{ "BearerAuth": [] }]
+      }
+    },
+    "/admin/createUser": {
+      "post": {
+        "summary": "Create a new user (Admin only)",
+        "description": "Admin can create users with role 'user' or other roles.",
+        "tags": ["admin"],
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "user",
+            "in": "body",
+            "description": "User details",
+            "required": true,
+            "schema": { "$ref": "#/definitions/models.User" }
+          }
+        ],
+        "responses": {
+          "201": { "description": "User created successfully", "schema": { "type": "object", "additionalProperties": true } },
+          "400": { "description": "Invalid request or missing fields" },
+          "409": { "description": "Email already exists" },
+          "500": { "description": "Internal server error" }
+        },
+        "security": [{ "BearerAuth": [] }]
+      }
+    },
+    "/admin/addMedicine": {
+      "post": {
+        "summary": "Add a new medicine",
+        "description": "Admin can add new medicine to the stock.",
+        "tags": ["admin"],
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "medicine",
+            "in": "body",
+            "description": "Medicine details",
+            "required": true,
+            "schema": { "$ref": "#/definitions/models.Medicine" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Medicine added", "schema": { "type": "object", "additionalProperties": true } },
+          "400": { "description": "Invalid request" },
+          "500": { "description": "Internal server error" }
+        },
+        "security": [{ "BearerAuth": [] }]
+      }
+    },
+    "/admin/deleteMedicine": {
+      "delete": {
+        "summary": "Delete a medicine",
+        "description": "Admin can delete a medicine from stock.",
+        "tags": ["admin"],
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "medicine",
+            "in": "body",
+            "description": "Medicine details to delete",
+            "required": true,
+            "schema": { "$ref": "#/definitions/models.Medicine" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Medicine deleted" },
+          "400": { "description": "Invalid request" },
+          "500": { "description": "Internal server error" }
+        },
+        "security": [{ "BearerAuth": [] }]
+      }
+    },
+    "/user/getAllMedicines": {
+      "get": {
+        "summary": "Get all medicines",
+        "description": "Fetches the complete list of medicines",
+        "tags": ["medicines"],
+        "produces": ["application/json"],
+        "responses": {
+          "200": { "description": "Success", "schema": { "type": "array", "items": { "$ref": "#/definitions/models.Medicine" } } },
+          "500": { "description": "Internal server error" }
+        },
+        "security": [{ "BearerAuth": [] }]
+      }
+    },
+    "/user/dispenseStock": {
+      "post": {
+        "summary": "Dispense medicine from stock",
+        "description": "Deducts stock of a specific medicine (handles concurrency with Redis locks)",
+        "tags": ["medicines"],
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "medicine",
+            "in": "body",
+            "description": "Medicine dispense request",
+            "required": true,
+            "schema": { "$ref": "#/definitions/models.Medicine" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Medicine dispensed", "schema": { "type": "object", "additionalProperties": true } },
+          "400": { "description": "Bad Request" },
+          "404": { "description": "Medicine not found" },
+          "409": { "description": "Conflict" },
+          "500": { "description": "Internal server error" }
+        },
+        "security": [{ "BearerAuth": [] }]
+      }
+    },
+    "/user/createPrescription": {
+      "post": {
+        "summary": "Create a prescription",
+        "description": "Stores a new prescription in the database",
+        "tags": ["prescriptions"],
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "parameters": [
+          {
+            "name": "prescription",
+            "in": "body",
+            "description": "Prescription data",
+            "required": true,
+            "schema": { "$ref": "#/definitions/models.Prescription" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Prescription created", "schema": { "$ref": "#/definitions/models.Prescription" } },
+          "400": { "description": "Bad Request" },
+          "500": { "description": "Internal server error" }
+        },
+        "security": [{ "BearerAuth": [] }]
+      }
+    }
+  },
+  "definitions": {
+    "models.User": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "password": { "type": "string" }
+      }
+    },
+    "models.Medicine": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "name": { "type": "string" },
+        "dosage_form": { "type": "string" },
+        "stock_quantity": { "type": "integer" }
+      }
+    },
+    "models.Prescription": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "integer" },
+        "patientname": { "type": "string" },
+        "medicinename": { "type": "string" },
+        "dosage": { "type": "string" },
+        "quantity": { "type": "integer" }
+      }
+    }
+  },
+  "securityDefinitions": {
+    "BearerAuth": { "type": "apiKey", "name": "Authorization", "in": "header" }
+  }
+}

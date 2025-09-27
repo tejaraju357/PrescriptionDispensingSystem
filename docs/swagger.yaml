@@ -1,0 +1,302 @@
+swagger: "2.0"
+info:
+  title: Prescription Dispensing System API
+  version: "1.0"
+  description: API for managing users, prescriptions, medicines, and dispensing
+host: localhost:9000
+basePath: /api
+schemes:
+  - http
+produces:
+  - application/json
+
+securityDefinitions:
+  BearerAuth:
+    type: apiKey
+    in: header
+    name: Authorization
+
+definitions:
+  models.Medicine:
+    type: object
+    description: Details of a medicine including stock and dosage form
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+      dosage_form:
+        type: string
+      stock_quantity:
+        type: integer
+
+  models.Prescription:
+    type: object
+    description: Contains patient info and prescribed medicine details
+    properties:
+      id:
+        type: integer
+      patientname:
+        type: string
+      medicinename:
+        type: string
+      dosage:
+        type: string
+      quantity:
+        type: integer
+
+  models.User:
+    type: object
+    description: User details including role
+    properties:
+      id:
+        type: integer
+      name:
+        type: string
+      email:
+        type: string
+      role:
+        type: string
+      password:
+        type: string
+
+paths:
+  /register:
+    post:
+      tags:
+        - auth
+      summary: Register the first admin user
+      description: Only one admin can be created. Creates an admin account.
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: user
+          required: true
+          schema:
+            $ref: "#/definitions/models.User"
+      responses:
+        "201":
+          description: Admin created successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              user:
+                $ref: "#/definitions/models.User"
+        "400":
+          description: Invalid request or missing fields
+        "403":
+          description: Forbidden action (admin already exists)
+        "409":
+          description: Email already exists
+        "500":
+          description: Internal server error
+      security:
+        - BearerAuth: []
+
+  /login:
+    post:
+      tags:
+        - auth
+      summary: Login user
+      description: Authenticates user and returns JWT token
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: credentials
+          required: true
+          schema:
+            type: object
+            properties:
+              email:
+                type: string
+              password:
+                type: string
+      responses:
+        "200":
+          description: Login successful
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+              token:
+                type: string
+              user:
+                $ref: "#/definitions/models.User"
+        "400":
+          description: Invalid request
+        "401":
+          description: Invalid credentials
+        "500":
+          description: Internal server error
+      security:
+        - BearerAuth: []
+
+  /admin/createUser:
+    post:
+      tags:
+        - admin
+      summary: Create a new user (Admin only)
+      description: Admin can create users with role 'user' or other roles
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: user
+          required: true
+          schema:
+            $ref: "#/definitions/models.User"
+      responses:
+        "201":
+          description: User created successfully
+        "400":
+          description: Invalid request or missing fields
+        "409":
+          description: Email already exists
+        "500":
+          description: Internal server error
+      security:
+        - BearerAuth: []
+
+  /admin/addMedicine:
+    post:
+      tags:
+        - admin
+      summary: Add medicine (Admin only)
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: medicine
+          required: true
+          schema:
+            $ref: "#/definitions/models.Medicine"
+      responses:
+        "200":
+          description: Medicine added successfully
+        "400":
+          description: Invalid request
+        "500":
+          description: Internal server error
+      security:
+        - BearerAuth: []
+
+  /admin/deleteMedicine:
+    delete:
+      tags:
+        - admin
+      summary: Delete a medicine (Admin only)
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: medicine
+          required: true
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+      responses:
+        "200":
+          description: Medicine deleted successfully
+        "404":
+          description: Medicine not found
+        "500":
+          description: Internal server error
+      security:
+        - BearerAuth: []
+
+  /user/getAllMedicines:
+    get:
+      tags:
+        - user
+      summary: Get all medicines
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: List of all medicines
+          schema:
+            type: array
+            items:
+              $ref: "#/definitions/models.Medicine"
+        "500":
+          description: Internal server error
+      security:
+        - BearerAuth: []
+
+  /user/dispenseStock:
+    post:
+      tags:
+        - medicines
+      summary: Dispense medicine from stock
+      description: Deducts stock of a specific medicine (handles concurrency with Redis locks)
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: medicine
+          required: true
+          schema:
+            $ref: "#/definitions/models.Medicine"
+      responses:
+        "200":
+          description: Medicine dispensed successfully
+          schema:
+            type: object
+            additionalProperties: true
+        "400":
+          description: Bad request
+        "404":
+          description: Medicine not found
+        "409":
+          description: Conflict / system busy
+        "500":
+          description: Internal server error
+      security:
+        - BearerAuth: []
+
+  /user/createPrescription:
+    post:
+      tags:
+        - prescriptions
+      summary: Create a prescription
+      description: Stores a new prescription in the database
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: prescription
+          required: true
+          schema:
+            $ref: "#/definitions/models.Prescription"
+      responses:
+        "200":
+          description: Prescription created successfully
+          schema:
+            $ref: "#/definitions/models.Prescription"
+        "400":
+          description: Bad request
+        "500":
+          description: Internal server error
+      security:
+        - BearerAuth: []
