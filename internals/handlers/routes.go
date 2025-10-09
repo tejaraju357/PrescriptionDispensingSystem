@@ -25,7 +25,7 @@ func GetAllMedicnes(c *fiber.Ctx) error {
 	query := `SELECT name, dosage_form, stock_quantity FROM medicines`
 	rows, err := db.DB.Query(context.Background(), query)
 	if err != nil {
-		return err
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 	defer rows.Close()
 
@@ -33,13 +33,14 @@ func GetAllMedicnes(c *fiber.Ctx) error {
 	for rows.Next() {
 		var med models.Medicine
 		if err := rows.Scan(&med.Name, &med.DosageForm, &med.StockQuantity); err != nil {
-			return err
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 		allMeds = append(allMeds, med)
 	}
 
 	return c.JSON(allMeds)
 }
+
 
 
 // DispenseStock godoc
@@ -58,16 +59,12 @@ func GetAllMedicnes(c *fiber.Ctx) error {
 func DispenseStock(c *fiber.Ctx) error {
 	var req models.Medicine
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid request body",
-		})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
 
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "medicine name is required",
-		})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "medicine name is required"})
 	}
 
 	ctx := context.Background()
@@ -80,15 +77,11 @@ func DispenseStock(c *fiber.Ctx) error {
 	for {
 		select {
 		case <-timeout:
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-				"error": "system busy, try again later",
-			})
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "system busy, try again later"})
 		case <-ticker.C:
 			acquired, err := cache.AcquireLock(lockKey, 5*time.Second)
 			if err != nil {
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": "lock acquisition failed",
-				})
+				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "lock acquisition failed"})
 			}
 			if acquired {
 				defer cache.ReleaseLock(lockKey)
@@ -103,9 +96,7 @@ DISPENSE:
 	query := "SELECT id, stock_quantity FROM medicines WHERE LOWER(name) = LOWER($1)"
 	err := db.DB.QueryRow(ctx, query, req.Name).Scan(&medID, &stock)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "medicine not found",
-		})
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "medicine not found"})
 	}
 
 	if stock < req.StockQuantity {
@@ -117,18 +108,14 @@ DISPENSE:
 	updateQuery := "UPDATE medicines SET stock_quantity = stock_quantity - $1, updated_at=$2 WHERE id=$3"
 	_, err = db.DB.Exec(ctx, updateQuery, req.StockQuantity, time.Now(), medID)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to update stock",
-		})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to update stock"})
 	}
 
 	var updatedStock int
 	selectQuery := "SELECT name, dosage_form, stock_quantity FROM medicines WHERE id=$1"
 	err = db.DB.QueryRow(ctx, selectQuery, medID).Scan(&req.Name, &req.DosageForm, &updatedStock)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to fetch updated medicine info",
-		})
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch updated medicine info"})
 	}
 	req.StockQuantity = updatedStock
 
@@ -138,7 +125,7 @@ DISPENSE:
 	})
 }
 
-// CreatePriscription godoc
+// CreatePrescription godoc
 // @Summary      Create a prescription
 // @Description  Stores a new prescription in the database
 // @Tags         prescriptions

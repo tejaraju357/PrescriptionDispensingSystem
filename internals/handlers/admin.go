@@ -56,27 +56,31 @@ func AddMedicine(c *fiber.Ctx) error {
 
 ATOMIC:
 	var exists bool
-	query := `SELECT EXISTS(SELECT 1 FROM medicines WHERE name=$1)`
-	err := db.DB.QueryRow(ctx, query, med.Name).Scan(&exists)
+	err := db.DB.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM medicines WHERE name=$1)`, med.Name).Scan(&exists)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if exists {
-		updateQuery := `UPDATE medicines 
-		                SET stock_quantity = stock_quantity + $1, updated_at = NOW() 
-		                WHERE name=$2 
-		                RETURNING stock_quantity`
-		err := db.DB.QueryRow(ctx, updateQuery, med.StockQuantity, med.Name).Scan(&med.StockQuantity)
+		// Update stock
+		err := db.DB.QueryRow(ctx,
+			`UPDATE medicines 
+			 SET stock_quantity = stock_quantity + $1, updated_at = NOW() 
+			 WHERE name=$2 
+			 RETURNING stock_quantity`,
+			med.StockQuantity, med.Name,
+		).Scan(&med.StockQuantity)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
 	} else {
-		insertQuery := `INSERT INTO medicines (name, dosage_form, stock_quantity, created_at, updated_at) 
-		                VALUES ($1,$2,$3,NOW(),NOW()) 
-		                RETURNING name,dosage_form,stock_quantity`
-		err := db.DB.QueryRow(ctx, insertQuery, med.Name, med.DosageForm, med.StockQuantity).
-			Scan(&med.Name, &med.DosageForm, &med.StockQuantity)
+		// Insert new medicine
+		err := db.DB.QueryRow(ctx,
+			`INSERT INTO medicines (name, dosage_form, stock_quantity, created_at, updated_at) 
+			 VALUES ($1, $2, $3, NOW(), NOW()) 
+			 RETURNING name, dosage_form, stock_quantity`,
+			med.Name, med.DosageForm, med.StockQuantity,
+		).Scan(&med.Name, &med.DosageForm, &med.StockQuantity)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
@@ -84,6 +88,7 @@ ATOMIC:
 
 	return c.JSON(med)
 }
+
 
 // DeleteMedicine godoc
 // @Summary Delete a medicine by name
@@ -102,18 +107,19 @@ func DeleteMedicine(c *fiber.Ctx) error {
 		Name string `json:"name"`
 	}
 	if err := c.BodyParser(&body); err != nil {
-		return c.JSON("Invalid input")
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid input"})
 	}
 
 	query := `DELETE FROM medicines WHERE LOWER(name) = LOWER($1)`
 	res, err := db.DB.Exec(context.Background(), query, body.Name)
 	if err != nil {
-		return c.JSON(err.Error())
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 	}
 
 	if rows := res.RowsAffected(); rows == 0 {
-		return c.JSON("No medicine found with that name")
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "no medicine found with that name"})
 	}
 
-	return c.JSON("Medicine Deleted")
+	return c.JSON(fiber.Map{"message": "medicine deleted successfully"})
 }
+

@@ -20,11 +20,13 @@ func DBConnect() {
     if connStr == "" {
         log.Fatal("DATABASE_URL environment variable not set")
     }
+
+	
     pool, err := pgxpool.New(context.Background(), connStr)
     if err != nil {
         log.Fatalf("Unable to connect to database: %v\n", err)
     }
     DB = pool
 
-	fmt.Println("DB conneted succesfllu")
+    fmt.Println("DB connected successfully")
 }

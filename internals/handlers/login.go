@@ -49,30 +49,32 @@ func Register(c *fiber.Ctx) error {
 		})
 	}
 
-	if user.Role == "admin" {
-		var existingAdmin string
-		err := db.DB.QueryRow(context.Background(),
-			"SELECT email FROM users WHERE role = 'admin'",
-		).Scan(&existingAdmin)
-
-		if err == nil {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "an admin already exists",
-			})
-		} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error":   "database error",
-				"details": err.Error(),
-			})
-		}
-	} else {
+	if user.Role != "admin" {
 		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 			"error": "only admin can create users",
 		})
 	}
 
-	var existingEmail string
+	// Check if admin exists
+	var existingAdmin string
 	err := db.DB.QueryRow(context.Background(),
+		"SELECT email FROM users WHERE role = 'admin'",
+	).Scan(&existingAdmin)
+
+	if err == nil {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+			"error": "an admin already exists",
+		})
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "database error",
+			"details": err.Error(),
+		})
+	}
+
+	// Check if email already exists
+	var existingEmail string
+	err = db.DB.QueryRow(context.Background(),
 		"SELECT email FROM users WHERE email = $1", user.Email,
 	).Scan(&existingEmail)
 
@@ -87,6 +89,7 @@ func Register(c *fiber.Ctx) error {
 		})
 	}
 
+	// Insert user (unnamed statement)
 	_, err = db.DB.Exec(context.Background(),
 		"INSERT INTO users (name, email, role, password, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW())",
 		user.Name, user.Email, user.Role, user.Password,
@@ -108,6 +111,7 @@ func Register(c *fiber.Ctx) error {
 	})
 }
 
+
 // CreateUsers godoc
 // @Summary Create a new user (Admin only)
 // @Description Admin can create users with role 'user' or other roles.
@@ -124,7 +128,7 @@ func Register(c *fiber.Ctx) error {
 func CreateUsers(c *fiber.Ctx) error {
 	var user models.User
 	if err := c.BodyParser(&user); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(&fiber.Map{
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error":   "invalid request body",
 			"details": err.Error(),
 		})
@@ -136,39 +140,41 @@ func CreateUsers(c *fiber.Ctx) error {
 	user.Role = strings.TrimSpace(user.Role)
 
 	if user.Name == "" || user.Password == "" || user.Email == "" || user.Role == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(&fiber.Map{
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 			"error": "please fill all required details",
 		})
 	}
 
+	// Check if email exists
 	var existingEmail string
 	err := db.DB.QueryRow(context.Background(),
 		"SELECT email FROM users WHERE email = $1", user.Email,
 	).Scan(&existingEmail)
 
 	if err == nil {
-		return c.Status(fiber.StatusConflict).JSON(&fiber.Map{
+		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 			"error": "email already exists",
 		})
 	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
-		return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   "database query error",
 			"details": err.Error(),
 		})
 	}
 
+	// Insert user
 	_, err = db.DB.Exec(context.Background(),
 		"INSERT INTO users (name, email, role, password, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW())",
 		user.Name, user.Email, user.Role, user.Password,
 	)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(&fiber.Map{
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error":   "failed to register user",
 			"details": err.Error(),
 		})
 	}
 
-	return c.Status(fiber.StatusCreated).JSON(&fiber.Map{
+	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message": "user created successfully",
 		"user": fiber.Map{
 			"id":    user.ID,
@@ -178,6 +184,7 @@ func CreateUsers(c *fiber.Ctx) error {
 		},
 	})
 }
+
 
 // Login godoc
 // @Summary Login user
@@ -210,7 +217,7 @@ func Login(c *fiber.Ctx) error {
 	).Scan(&user.ID, &user.Name, &user.Email, &user.Role, &user.Password)
 
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Invalid credentials",
 			})
@@ -220,6 +227,7 @@ func Login(c *fiber.Ctx) error {
 			"details": err.Error(),
 		})
 	}
+
 	if user.Password != input.Password {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "Invalid credentials",
@@ -244,3 +252,4 @@ func Login(c *fiber.Ctx) error {
 		},
 	})
 }
+
