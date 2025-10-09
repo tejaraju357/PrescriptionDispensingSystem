@@ -33,10 +33,11 @@ func main() {
 
 	app := fiber.New()
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost:5173, https://prescriptionfrontend.onrender.com",
-		AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+    	AllowOrigins: "*", // or specific: "http://localhost:5173"
+    	AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+    	AllowHeaders: "Origin, Content-Type, Accept, Authorization",
 	}))
+
 
 	// Auth routes
 	auth := app.Group("/api")
